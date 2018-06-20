@@ -35,11 +35,31 @@ func (speaii *SPEAII) Run(Generations int, PopulationSize int, ReferencePopulati
 
 	speaii.newPopulation()
 	for speaii.Generation = 1; speaii.Generation <= Generations; speaii.Generation++ {
-		if speaii.Generation == 28 {
-			fmt.Print("a")
-		}
 		speaii.nextPopulation()
 		speaii.doPlot()
+	}
+	speaii.getNonDominated()
+	speaii.doPlot()
+}
+
+//GetNonDominated :: Copia os nao dominados do arquivo, para a populacao
+func (speaii *SPEAII) getNonDominated() {
+	speaii.CurrentPopulation = []Individual{}
+	size := len(speaii.ReferencePopulation)
+	for i := 0; i < size; i++ {
+		speaii.ReferencePopulation[i].Rawfitness = 0
+	}
+	for i := 0; i < size; i++ {
+		for j := 0; j < size; j++ {
+			if speaii.ReferencePopulation[i].Dominate(&speaii.ReferencePopulation[j]) {
+				speaii.ReferencePopulation[j].Rawfitness++
+			}
+		}
+	}
+	for i := 0; i < size; i++ {
+		if speaii.ReferencePopulation[i].Rawfitness == 0 {
+			speaii.CurrentPopulation = append(speaii.CurrentPopulation, speaii.ReferencePopulation[i])
+		}
 	}
 }
 
@@ -47,7 +67,7 @@ func (speaii *SPEAII) Run(Generations int, PopulationSize int, ReferencePopulati
 func (speaii *SPEAII) doPlot() {
 	xaxis := make([]float64, 1)
 	yaxis := make([]float64, 1)
-	for i := 0; i < speaii.PopulationSize; i++ {
+	for i := 0; i < len(speaii.CurrentPopulation); i++ {
 		xaxis = append(xaxis, speaii.CurrentPopulation[i].Goals[0])
 		yaxis = append(yaxis, speaii.CurrentPopulation[i].Goals[1])
 	}
@@ -80,7 +100,7 @@ func (speaii *SPEAII) newPopulation() {
 func (speaii SPEAII) selectParentByTour() (int, Individual) {
 	index := rand.Intn(speaii.ReferencePopulationSize)
 	individual := speaii.ReferencePopulation[index]
-	for i := 1; i < 3; i++ {
+	for i := 1; i < 2; i++ {
 		if newIndex := rand.Intn(speaii.ReferencePopulationSize); speaii.ReferencePopulation[newIndex].Better(individual) {
 			index = newIndex
 			individual = speaii.ReferencePopulation[index]
@@ -105,6 +125,9 @@ func (speaii *SPEAII) nextPopulation() {
 		child1.Initialize()
 		child2.Initialize()
 		Crossover(parent1, parent2, &child1, &child2)
+
+		child1.Mutation(speaii.MutationProbability)
+		child2.Mutation(speaii.MutationProbability)
 
 		//Avalia os filhos gerados de acordo com o novo DNA
 		child1.Eval()
@@ -197,6 +220,8 @@ func (speaii *SPEAII) mangeReferencePopulation(union []*Individual) {
 	if sizeReference > speaii.ReferencePopulationSize { //Extrapolou o limite.
 		for i := 0; i < sizeReference; i++ {
 			ordered := make([]*Individual, sizeReference)
+
+			speaii.ReferencePopulation[i].Density = 0
 
 			for j := 0; j < sizeReference; j++ {
 				speaii.ReferencePopulation[j].GoalsDistance(speaii.ReferencePopulation[i])
