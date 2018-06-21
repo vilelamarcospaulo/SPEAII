@@ -35,13 +35,13 @@ func readOptimal() []speaii.Individual {
 }
 
 func main() {
-	agAux := speaii.SPEAII{}
-	agAux.CurrentPopulation = readOptimal()
-	agAux.DoPlot()
+	// agAux := speaii.SPEAII{}
+	// agAux.CurrentPopulation = readOptimal()
+	// agAux.DoPlot()
 
 	ag := speaii.SPEAII{}
 	start := time.Now()
-	ag.Run(200, 1000, 300, 0.02)
+	ag.Run(500, 1000, 600, 0.02)
 	elapsed := time.Since(start)
 	optimal := readOptimal()
 
