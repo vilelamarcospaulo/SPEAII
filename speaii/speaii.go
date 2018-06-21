@@ -21,6 +21,13 @@ type SPEAII struct {
 	MutationProbability float64
 
 	plot *glot.Plot
+
+	ParetoOptimal        []Individual
+	ErrorRate            float64
+	GenerationalDistance float64
+	ParetoSubset         float64
+	Spread               float64
+	MaximumSpread        float64
 }
 
 //Run :: inicializa a configuração e processa o ag
@@ -36,10 +43,10 @@ func (speaii *SPEAII) Run(Generations int, PopulationSize int, ReferencePopulati
 	speaii.newPopulation()
 	for speaii.Generation = 1; speaii.Generation <= Generations; speaii.Generation++ {
 		speaii.nextPopulation()
-		speaii.doPlot()
+		speaii.DoPlot()
 	}
 	speaii.getNonDominated()
-	speaii.doPlot()
+	speaii.DoPlot()
 }
 
 //GetNonDominated :: Copia os nao dominados do arquivo, para a populacao
@@ -61,10 +68,15 @@ func (speaii *SPEAII) getNonDominated() {
 			speaii.CurrentPopulation = append(speaii.CurrentPopulation, speaii.ReferencePopulation[i])
 		}
 	}
+	speaii.PopulationSize = len(speaii.CurrentPopulation)
 }
 
-//Plot :: Plota a populacao atual
-func (speaii *SPEAII) doPlot() {
+//DoPlot :: Plota a populacao atual
+func (speaii *SPEAII) DoPlot() {
+	if speaii.plot == nil {
+		speaii.plot, _ = glot.NewPlot(2, true, true)
+	}
+
 	xaxis := make([]float64, 1)
 	yaxis := make([]float64, 1)
 	for i := 0; i < len(speaii.CurrentPopulation); i++ {
@@ -247,4 +259,117 @@ func (speaii *SPEAII) mangeReferencePopulation(union []*Individual) {
 			}
 		}
 	}
+}
+
+//CalcErrorRate :: Calcula o error rate da populacao atual
+func (speaii *SPEAII) CalcErrorRate() float64 {
+	speaii.ErrorRate = 0.0
+
+	for _, ind := range speaii.CurrentPopulation {
+		for _, indRef := range speaii.ParetoOptimal {
+			if indRef.Dominate(&ind) {
+				speaii.ErrorRate++
+				break
+			}
+		}
+	}
+
+	speaii.ErrorRate /= float64(speaii.PopulationSize)
+	return speaii.ErrorRate
+}
+
+//CalcGenerationalDistance :: Calculaa generational distance
+func (speaii *SPEAII) CalcGenerationalDistance() float64 {
+	speaii.GenerationalDistance = 0.0
+
+	nonDominated := make([]*Individual, 0)
+	for i := 0; i < speaii.PopulationSize; i++ {
+		nonDominated = append(nonDominated, &speaii.CurrentPopulation[i])
+	}
+
+	sizeRef := len(speaii.ParetoOptimal)
+	for i := 0; i < speaii.PopulationSize; i++ {
+		for j := 0; j < sizeRef; j++ {
+			speaii.ParetoOptimal[j].GoalsDistance(speaii.CurrentPopulation[i])
+		}
+		sort.Sort(ByDistance(nonDominated))
+
+		speaii.GenerationalDistance += nonDominated[0].Distance
+	}
+
+	speaii.GenerationalDistance = math.Sqrt(speaii.GenerationalDistance)
+	speaii.GenerationalDistance /= float64(speaii.PopulationSize)
+
+	return speaii.GenerationalDistance
+}
+
+//CalcParetoSubset :: Calcula o paretosubset
+func (speaii *SPEAII) CalcParetoSubset() float64 {
+	speaii.ParetoSubset = (1 - speaii.ErrorRate) * float64(speaii.PopulationSize)
+	return speaii.ParetoSubset
+}
+
+//CalcSpread :: Calcula o spread
+func (speaii *SPEAII) CalcSpread() float64 {
+	nonDominated := make([]*Individual, 0)
+
+	for i := 0; i < speaii.PopulationSize; i++ {
+		speaii.CurrentPopulation[i].CurrentGoal = 0
+		nonDominated = append(nonDominated, &speaii.CurrentPopulation[i])
+	}
+	sort.Sort(ByGoal(nonDominated)) //ORDERNA PELO VETOR X FIXO
+
+	dIE := 0.0
+
+	byGoalSorted := make([]*Individual, speaii.PopulationSize)
+	copy(byGoalSorted, nonDominated)
+	for goal := 0; goal < speaii.CurrentPopulation[0].GoalsSize; goal++ {
+		for i := 0; i < speaii.PopulationSize; i++ {
+			byGoalSorted[i].CurrentGoal = goal
+		}
+		sort.Sort(ByGoal(byGoalSorted))
+
+		dIE += byGoalSorted[0].GoalsDistance(*nonDominated[0])                                             // soma os extremos superiores em realacao ao objetivo
+		dIE += byGoalSorted[speaii.PopulationSize-1].GoalsDistance(*nonDominated[speaii.PopulationSize-1]) // soma os extremos inferirores
+	}
+
+	dAverage := 0.0
+	for i := 0; i < speaii.PopulationSize-1; i++ {
+		dAverage += nonDominated[i].GoalsDistance(*nonDominated[i+1])
+	}
+	dAverage /= float64(speaii.PopulationSize - 1)
+
+	sum := 0.0
+	for i := 0; i < speaii.PopulationSize-1; i++ {
+		di := nonDominated[i].GoalsDistance(*nonDominated[i+1])
+		sum += math.Abs(di - dAverage)
+	}
+
+	a := dIE + sum
+	b := dIE + ((dAverage) * float64(speaii.PopulationSize-1))
+	speaii.Spread = a / b
+
+	return speaii.Spread
+}
+
+//CalcMaximumSpread :: Calcula o MaximumSpread
+func (speaii *SPEAII) CalcMaximumSpread() float64 {
+	nonDominated := make([]*Individual, 0)
+
+	for i := 0; i < speaii.PopulationSize; i++ {
+		nonDominated = append(nonDominated, &speaii.CurrentPopulation[i])
+	}
+	speaii.MaximumSpread = 0.0
+
+	for goal := 0; goal < speaii.CurrentPopulation[0].GoalsSize; goal++ {
+		for i := 0; i < speaii.PopulationSize; i++ {
+			nonDominated[i].CurrentGoal = goal
+		}
+		sort.Sort(ByGoal(nonDominated))
+
+		speaii.MaximumSpread += nonDominated[0].GoalsDistance(*nonDominated[speaii.PopulationSize-1])
+	}
+
+	speaii.MaximumSpread = math.Sqrt(speaii.MaximumSpread)
+	return speaii.MaximumSpread
 }

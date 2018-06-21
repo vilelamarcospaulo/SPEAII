@@ -10,8 +10,9 @@ type Individual struct {
 	DNA     *([]float64)
 	DNASize int
 
-	Goals     []float64
-	GoalsSize int
+	Goals       []float64
+	GoalsSize   int
+	CurrentGoal int
 
 	Fitness    float64
 	Strength   float64
